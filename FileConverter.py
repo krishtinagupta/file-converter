@@ -12,10 +12,8 @@ def read_pdf(path):
 
     with pdfplumber.open(path) as pdf:
         for page in pdf.pages:
-            # Strategy 1: default line-based detection (borders wale tables)
             table = page.extract_table()
 
-            # Strategy 2: agar lines/borders na milen, text-position ke basis par try karo
             if not table:
                 table = page.extract_table(table_settings={
                     "vertical_strategy": "text",
@@ -29,7 +27,6 @@ def read_pdf(path):
         df = pd.DataFrame(all_rows[1:], columns=all_rows[0])
         return df
 
-    # Strategy 3: koi table structure nahi mila -> raw text se best-effort table banao
     with pdfplumber.open(path) as pdf:
         lines = []
         for page in pdf.pages:
@@ -60,9 +57,6 @@ def read_xml(path):
     return pd.read_xml(path)
 
 def read_txt(path):
-    # Plain text ko raw lines ki tarah padho - jabardasti column split mat karo.
-    # Agar file genuinely tab-separated hai to bhi wo ek column mein aayegi
-    # aur write_txt/write_pdf usko sahi tarike se handle karenge.
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.read().splitlines()
     return pd.DataFrame({"text": lines})
@@ -73,12 +67,6 @@ def write_csv(df, path):
     df.to_csv(path, index=False)
 
 def write_pdf(df, path, from_format="csv"):
-    """
-    from_format ke hisaab se PDF ka structure decide hota hai:
-    - csv / excel / xml / pdf -> tabular data hai, isliye bordered table grid
-    - json -> key-value / record structure hai, isliye har row ek block ki tarah
-    - txt -> plain lines hain, isliye bina border ke seedha text
-    """
     if from_format == "json":
         _write_pdf_as_records(df, path)
     elif from_format == "txt":
@@ -88,7 +76,6 @@ def write_pdf(df, path, from_format="csv"):
 
 
 def _write_pdf_as_table(df, path):
-    """CSV/Excel/XML/PDF -> bordered table grid (original tabular structure preserve)."""
     pdf = FPDF(orientation="L")
     pdf.add_page()
 
@@ -139,19 +126,11 @@ def _write_pdf_as_table(df, path):
 
 
 def _wrap_text_lines(pdf, text, max_width):
-    """
-    Text ko lines ki list mein todta hai jo max_width mein fit ho jaye.
-    Normal words space par wrap hote hain, lekin agar koi single word/token
-    (jaise ek ID, URL, ya bina-space wali lambi string) khud hi max_width se
-    zyada chaudi ho, to usse character-level par force-break kar diya jata hai
-    taaki wo kabhi bhi page se bahar overflow na ho.
-    """
     lines = []
     for raw_line in str(text).split("\n"):
         words = raw_line.split(" ")
         current = ""
         for word in words:
-            # Agar akela word hi width se zyada chaudा hai, usse chunks mein todo
             while pdf.get_string_width(word) > max_width:
                 lo, hi = 1, len(word)
                 fit = 1
@@ -182,7 +161,6 @@ def _wrap_text_lines(pdf, text, max_width):
 
 
 def _write_pdf_as_records(df, path):
-    """JSON -> key: value format, koi table nahi. Koi 'Record N' heading nahi."""
     pdf = FPDF(orientation="P")
     pdf.add_page()
     pdf.set_font("Arial", size=10)
@@ -198,7 +176,6 @@ def _write_pdf_as_records(df, path):
                     pdf.add_page()
                 pdf.cell(page_width, line_height, line, ln=1)
 
-        # Records ke beech thoda gap, taaki alag record dikhe (heading ke bina)
         if pdf.get_y() + line_height > pdf.h - pdf.b_margin:
             pdf.add_page()
         pdf.ln(4)
@@ -207,7 +184,6 @@ def _write_pdf_as_records(df, path):
 
 
 def _write_pdf_as_plain_text(df, path):
-    """TXT -> seedha plain text lines, koi border/table nahi."""
     pdf = FPDF(orientation="P")
     pdf.add_page()
     pdf.set_font("Arial", size=11)
@@ -221,16 +197,12 @@ def _write_pdf_as_plain_text(df, path):
                 pdf.add_page()
             pdf.cell(page_width, line_height, line, ln=1)
 
-    # Agar raw plain text hai (single "text" column, read_txt se aayi),
-    # to seedha lines print karo - koi header, koi tab-join nahi.
     if list(df.columns) == ["text"]:
         for val in df["text"]:
             print_text(str(val))
         pdf.output(path)
         return
 
-    # Warna (multi-column data jo TXT format mein export ho raha hai) -
-    # header + tab-separated lines ki tarah dikhao.
     print_text("\t".join(str(col) for col in df.columns))
     pdf.ln(2)
 
@@ -250,7 +222,6 @@ def write_xml(df, path):
 
 def write_txt(df, path):
     if list(df.columns) == ["text"]:
-        # Raw plain text hai - seedha lines likho, koi header nahi.
         with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(str(v) for v in df["text"]))
     else:
@@ -265,7 +236,6 @@ def convert(input_path, output_path, from_format, to_format):
     df = readers[from_format](input_path)
 
     if to_format == "pdf":
-        # write_pdf ko original format batao taaki wo usi structure mein PDF banaye
         writers[to_format](df, output_path, from_format=from_format)
     else:
         writers[to_format](df, output_path)
