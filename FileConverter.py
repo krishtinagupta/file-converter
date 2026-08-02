@@ -3,7 +3,6 @@ import pandas as pd
 import pdfplumber
 from fpdf import FPDF
 
-# ---------- READ FUNCTIONS ----------
 def read_csv(path):
     return pd.read_csv(path)
 
@@ -24,7 +23,25 @@ def read_pdf(path):
                 all_rows.extend(table)
 
     if all_rows:
-        df = pd.DataFrame(all_rows[1:], columns=all_rows[0])
+        max_cols = max(len(row) for row in all_rows)
+        all_rows = [
+            list(row) + [None] * (max_cols - len(row))
+            for row in all_rows
+        ]
+
+        header = all_rows[0]
+        seen = {}
+        clean_header = []
+        for i, h in enumerate(header):
+            name = h if h not in (None, "") else f"col_{i}"
+            if name in seen:
+                seen[name] += 1
+                name = f"{name}_{seen[name]}"
+            else:
+                seen[name] = 0
+            clean_header.append(name)
+
+        df = pd.DataFrame(all_rows[1:], columns=clean_header)
         return df
 
     with pdfplumber.open(path) as pdf:
@@ -62,7 +79,6 @@ def read_txt(path):
     return pd.DataFrame({"text": lines})
 
 
-# ---------- WRITE FUNCTIONS ----------
 def write_csv(df, path):
     df.to_csv(path, index=False)
 
@@ -227,7 +243,6 @@ def write_txt(df, path):
     else:
         df.to_csv(path, sep="\t", index=False)
 
-# ---------- CONVERT FUNCTION ----------
 def convert(input_path, output_path, from_format, to_format):
     readers = {"csv": read_csv, "json": read_json, "excel": read_excel,
                "xml": read_xml, "txt": read_txt, "pdf": read_pdf}
@@ -240,7 +255,6 @@ def convert(input_path, output_path, from_format, to_format):
     else:
         writers[to_format](df, output_path)
 
-# ---------- EXTENSION -> FORMAT MAPPING ----------
 ext_to_format = {
     "csv": "csv",
     "json": "json",
@@ -253,12 +267,10 @@ ext_to_format = {
 
 format_list = ["csv", "json", "excel", "xml", "txt", "pdf"]
 
-# ---------- STREAMLIT UI ----------
 st.title("📁 File Converter and Comparison Tool")
 
 uploaded_file = st.file_uploader("File upload, ", type=["csv", "json", "xlsx", "xml", "txt", "pdf"])
 
-# Detect format from uploaded file's extension
 detected_format = None
 if uploaded_file is not None:
     file_ext = uploaded_file.name.split(".")[-1].lower()
