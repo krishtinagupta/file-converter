@@ -36,8 +36,8 @@ def read_pdf(path):
 
     if not lines:
         raise ValueError(
-            "PDF se koi text nahi mila. Ye scanned/image-based PDF lagta hai — "
-            "isko convert karne ke liye pehle OCR (jaise pytesseract) chahiye hoga."
+            "No text found in the PDF. This looks like a scanned/image-based PDF — "
+            "OCR (e.g. pytesseract) is required before converting it."
         )
 
     rows = [line.split() for line in lines if line.strip()]
